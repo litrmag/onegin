@@ -5,68 +5,83 @@
 #include <assert.h>
 #include <ctype.h>
 
-unsigned int ReadFromFile (char* filename, char* buffer);
-char** RequestMemory (unsigned int read_lines);
-unsigned int LineCounter (char* buffer, unsigned int read_char);
-void DivisionIntoLines (char* buffer, char** index, char** index_copy, unsigned int read_char);
-void Sort (char** index, unsigned int num_of_lines, int(*CompareFunc)(char** address1, char** address2));
-int CompareBegin ( char** address1,  char** address2);
-int CompareEnd (char** address1, char** address2);
-void ChangeValues (char** value1, char** value2);
-void PrintStrings (char** index, FILE* file_write, unsigned int read_lines, const char* description);
-int StrcmpForAlphaBegin (char* str1,  char* str2);
-int StrcmpForAlphaEnd (char* str1,  char* str2);
+char*  ReadFromFile            (const char* filename, size_t* read_char);
+size_t LineCounter             (char* buffer, size_t read_char);
+void   DivisionIntoLines       (char* buffer, char** index_array, char** index_copy, size_t read_char);
+
+void   BubbleSort              (char** index_array, size_t num_of_lines, int(*CompareFunc)(const void* address1, const void* address2));
+int    CompareFromBegin        (const void* address1, const void* address2);
+int    CompareFromEnd          (const void* address1, const void* address2);
+int    StrcmpForAlphaFromBegin (char* str1, char* str2);
+int    StrcmpForAlphaFromEnd   (char* str1, char* str2);
+void   ChangeValues            (char** value1, char** value2);
+
+void   PrintStrings            (char** index_array, FILE* file_write, size_t read_lines, const char* description);
+
+void   MemoryCleansing         (char** index_array, char** index_copy_array, char*  buffer);
 
 int main()
 {
-    char* buffer;
-    unsigned int read_char = ReadFromFile ("OneginSource.txt", buffer);
-    unsigned int read_lines = LineCounter (buffer, read_char);
-    char** index = RequestMemory (read_lines);
-    char** index_copy = RequestMemory (read_lines);
-    DivisionIntoLines (buffer, index, index_copy, read_char);
+    size_t read_char = 0;
+    char* buffer = ReadFromFile ("OneginSource.txt", &read_char);
+    size_t read_lines = LineCounter (buffer, read_char);
+    char** index_array = (char**)calloc(read_lines, sizeof (char*));
+    char** index_copy_array = (char**)calloc(read_lines, sizeof (char*));
+    DivisionIntoLines (buffer, index_array, index_copy_array, read_char);
 
     FILE* file_write = fopen ("onegin_sorted.txt", "w");
+    if (!file_write) {
+        printf ("Error while opening file for writing\n");
+    }
 
-    Sort (index, read_lines, &CompareBegin);
-    PrintStrings (index, file_write, read_lines, "Eugene Onegin sorted from the beginning:\n\n");
+    qsort (index_array, read_lines, sizeof (char**), &CompareFromBegin);
+    //BubbleSort (index_array, read_lines, &CompareFromBegin); - this line was here earlier, now it's qsort
+    PrintStrings (index_array, file_write, read_lines, "Eugene Onegin sorted from the beginning:\n\n");
 
-    Sort (index, read_lines, &CompareEnd);
-    PrintStrings (index, file_write, read_lines, "Eugene Onegin sorted from the end:\n\n");
+    BubbleSort (index_array, read_lines, &CompareFromEnd);
+    PrintStrings (index_array, file_write, read_lines, "Eugene Onegin sorted from the end:\n\n");
 
-    PrintStrings (index_copy, file_write, read_lines, "The source of \"Eugene Onegin\":\n\n");
+    PrintStrings (index_copy_array, file_write, read_lines, "The source of \"Eugene Onegin\":\n\n");
 
     fclose (file_write);
-    free (*index);
-    free (*index_copy);
+
+    MemoryCleansing (index_array, index_copy_array, buffer);
 
     return 0;
 }
 
-char** RequestMemory (unsigned int read_lines)
-{
-    char** index = (char**)calloc(read_lines, sizeof (char*));
-    return index;
-}
+//------------------------------------------------------------------------------------------------------//
 
-unsigned int ReadFromFile (char* filename, char* buffer)
+char* ReadFromFile (const char* filename, size_t* read_char)
 {
+    assert (filename);
+    assert (read_char);
+
     struct stat file_stat;
     stat (filename, &file_stat);
-    buffer = (char*)calloc(file_stat.st_size + 1, sizeof (char));
-    FILE* file = fopen (filename, "r");
+    char* buffer = (char*)calloc(file_stat.st_size + 1, sizeof (char));
+    if (!buffer) {
+        printf ("Error in allocating memory for writing strings to the buffer\n");
+    }
 
-    unsigned int read_char = fread (buffer, sizeof(char), file_stat.st_size, file);
+    FILE* file = fopen (filename, "r");
+    if (!file) {
+        printf ("Error while opening file for reading\n");
+    }
+
+    *read_char = fread (buffer, sizeof(char), file_stat.st_size, file);
 
     fclose (file);
 
-    return read_char;
+    return buffer;
 }
 
-unsigned int LineCounter (char* buffer, unsigned int read_char)
+size_t LineCounter (char* buffer, size_t read_char)
 {
-    unsigned int num_lines = 1;
-    for (int num_char = 0; num_char < read_char; num_char++)
+    assert (buffer);
+
+    size_t num_lines = 1;
+    for (size_t num_char = 0; num_char < read_char; num_char++)
     {
         if (buffer[num_char] == '\n') {
             buffer[num_char] = '\0';
@@ -76,72 +91,77 @@ unsigned int LineCounter (char* buffer, unsigned int read_char)
     return num_lines;
 }
 
-void DivisionIntoLines (char* buffer, char** index, char** index_copy, unsigned int read_char)
+void DivisionIntoLines (char* buffer, char** index_array, char** index_copy_array, size_t read_char)
 {
-    unsigned int num_lines = 1;
+    assert (buffer);
+    assert (index_array);
+    assert (index_copy_array);
+
+    index_array[0] = buffer;
+    size_t num_line = 1;
+
     for (int num_char = 0; num_char < read_char; num_char++)
     {
-        if (buffer[num_char] == '\n') {
-            buffer[num_char] = '\0';
-            index[num_line] = &buffer[num_char+1];
-            index_copy[num_line] = &buffer[num_char+1];
+        if (buffer[num_char] == '\0') {
+            index_array[num_line] = &buffer[num_char+1];
+            index_copy_array[num_line] = &buffer[num_char+1];
             num_line++;
         }
     }
 }
 
-void Sort (char** index, unsigned int num_of_lines,
-           int(*CompareFunc)(char** address1, char** address2))
+//------------------------------------------------------------------------------------------------------//
+
+void BubbleSort (char** index_array, size_t num_of_lines,
+           int(*CompareFunc)(const void* address1, const void* address2))
 {
+    assert (index_array);
+
     for (int n_pass = num_of_lines; n_pass > 0; n_pass--)
     {
         for (size_t i = 0; i < num_of_lines - 1; i++)
         {
-            if ((*CompareFunc)(&index[i], &index[i+1]) > 0)
+            if ((*CompareFunc)(&index_array[i], &index_array[i+1]) > 0)
             {
-                ChangeValues (&index[i], &index[i+1]);
+                ChangeValues (&index_array[i], &index_array[i+1]);
             }
         }
     }
 }
 
-int CompareBegin (char** address1, char** address2)
+int CompareFromBegin (const void* address1, const void* address2)
 {
-    assert(*address1);
-    assert(*address2);
-    return StrcmpForAlphaBegin (*address1, *address2);
+    assert(address1);
+    assert(address2);
+
+    char* str1 = *(char**)address1;
+    char* str2 = *(char**)address2;
+
+    assert (str1);
+    assert (str2);
+
+    return StrcmpForAlphaFromBegin (str1, str2);
 }
 
-int CompareEnd (char** address1, char** address2)
+int CompareFromEnd (const void* address1, const void* address2)
 {
-    assert(*address1);
-    assert(*address2);
-    return StrcmpForAlphaEnd (*address1, *address2);
+    assert (address1);
+    assert (address2);
+
+    char* str1 = *(char**)address1;
+    char* str2 = *(char**)address2;
+
+    assert (str1);
+    assert (str2);
+
+    return StrcmpForAlphaFromEnd (str1, str2);
 }
 
-void ChangeValues (char** value1, char** value2)
+int StrcmpForAlphaFromBegin (char* str1, char* str2)
 {
-     char* temp = *value2;
-    *value2 = *value1;
-    *value1 = temp;
-}
+    assert (str1);
+    assert (str2);
 
-void PrintStrings (char** index, FILE* file_write, unsigned int read_lines, const char* description)
-{
-    fprintf (file_write, "%s", description);
-
-    for (int i = 0; i < read_lines; i++)
-    {
-        if (index[i] && *index[i] != 0){
-            fprintf (file_write, "<%s>\n", index[i]);
-        }
-    }
-
-    fprintf (file_write, "\n");
-}
-
-int StrcmpForAlphaBegin (char* str1,  char* str2)
-{
     for (; ; str1++, str2++) {
         while (*str1 && !isalpha (*str1)) str1++;
         while (*str2 && !isalpha (*str2)) str2++;
@@ -155,8 +175,11 @@ int StrcmpForAlphaBegin (char* str1,  char* str2)
     }
 }
 
-int StrcmpForAlphaEnd (char* str1,  char* str2)
+int StrcmpForAlphaFromEnd (char* str1,  char* str2)
 {
+    assert (str1);
+    assert (str2);
+
     char* end_str1 = str1 + strlen (str1) - 1;
     char* end_str2 = str2 + strlen (str2) - 1;
 
@@ -171,4 +194,43 @@ int StrcmpForAlphaEnd (char* str1,  char* str2)
             return 0;
         }
     }
+}
+
+void ChangeValues (char** value1, char** value2)
+{
+    assert (value1);
+    assert (value2);
+
+    char* temp = *value2;
+    *value2 = *value1;
+    *value1 = temp;
+}
+
+//------------------------------------------------------------------------------------------------------//
+
+void PrintStrings (char** index_array, FILE* file_write, size_t read_lines, const char* description)
+{
+    assert (index_array);
+    assert (file_write);
+    assert (description);
+
+    fprintf (file_write, "%s", description);
+
+    for (int i = 0; i < read_lines; i++)
+    {
+        if (index_array[i] && *index_array[i] != 0){
+            fprintf (file_write, "<%s>\n", index_array[i]);
+        }
+    }
+
+    fprintf (file_write, "\n");
+}
+
+//------------------------------------------------------------------------------------------------------//
+
+void MemoryCleansing (char** index_array, char** index_copy_array, char* buffer)
+{
+    free (index_array);
+    free (index_copy_array);
+    free (buffer);
 }
