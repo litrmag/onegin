@@ -9,7 +9,8 @@ char*  ReadFromFile            (const char* filename, size_t* read_char);
 size_t LineCounter             (char* buffer, size_t read_char);
 void   DivisionIntoLines       (char* buffer, char** index_array, char** index_copy, size_t read_char);
 
-void   BubbleSort              (char** index_array, size_t num_of_lines, int(*CompareFunc)(const void* address1, const void* address2));
+void   BubbleSort              (char** index_array, size_t num_of_lines,
+                                int(*CompareFunc)(const void* address1, const void* address2));
 int    CompareFromBegin        (const void* address1, const void* address2);
 int    CompareFromEnd          (const void* address1, const void* address2);
 int    StrcmpForAlphaFromBegin (char* str1, char* str2);
@@ -18,22 +19,25 @@ void   ChangeValues            (char** value1, char** value2);
 
 void   PrintStrings            (char** index_array, FILE* file_write, size_t read_lines, const char* description);
 
-void   MemoryCleansing         (char** index_array, char** index_copy_array, char*  buffer);
+void   MemoryClearing          (char** index_array, char** index_copy_array, char*  buffer);
 
-int main()
+int main ()
 {
     size_t read_char = 0;
     char* buffer = ReadFromFile ("OneginSource.txt", &read_char);
+    if (buffer == NULL)
+        return 1;
+
     size_t read_lines = LineCounter (buffer, read_char);
     char** index_array = (char**)calloc(read_lines, sizeof (char*));
     char** index_copy_array = (char**)calloc(read_lines, sizeof (char*));
     DivisionIntoLines (buffer, index_array, index_copy_array, read_char);
 
+
     FILE* file_write = fopen ("onegin_sorted.txt", "w");
     if (!file_write) {
         printf ("Error while opening file for writing\n");
     }
-
     qsort (index_array, read_lines, sizeof (char**), &CompareFromBegin);
     //BubbleSort (index_array, read_lines, &CompareFromBegin); - this line was here earlier, now it's qsort
     PrintStrings (index_array, file_write, read_lines, "Eugene Onegin sorted from the beginning:\n\n");
@@ -45,7 +49,7 @@ int main()
 
     fclose (file_write);
 
-    MemoryCleansing (index_array, index_copy_array, buffer);
+    MemoryClearing (index_array, index_copy_array, buffer);
 
     return 0;
 }
@@ -62,16 +66,23 @@ char* ReadFromFile (const char* filename, size_t* read_char)
     char* buffer = (char*)calloc(file_stat.st_size + 1, sizeof (char));
     if (!buffer) {
         printf ("Error in allocating memory for writing strings to the buffer\n");
+        return NULL;
     }
 
     FILE* file = fopen (filename, "r");
     if (!file) {
         printf ("Error while opening file for reading\n");
+        return NULL;
     }
 
     *read_char = fread (buffer, sizeof(char), file_stat.st_size, file);
-
-    fclose (file);
+    if (*read_char != file_stat.st_size) {
+        printf ("Error in reading the file\n");
+        return NULL;
+    }
+    if (fclose (file) == EOF) {
+        printf ("Error in closing the file\n");
+    }
 
     return buffer;
 }
@@ -113,7 +124,7 @@ void DivisionIntoLines (char* buffer, char** index_array, char** index_copy_arra
 //------------------------------------------------------------------------------------------------------//
 
 void BubbleSort (char** index_array, size_t num_of_lines,
-           int(*CompareFunc)(const void* address1, const void* address2))
+                 int(*CompareFunc)(const void* address1, const void* address2))
 {
     assert (index_array);
 
@@ -134,7 +145,7 @@ int CompareFromBegin (const void* address1, const void* address2)
     assert(address1);
     assert(address2);
 
-    char* str1 = *(char**)address1;
+    char* str1 = *(char**)address1; //TODO add const
     char* str2 = *(char**)address2;
 
     assert (str1);
@@ -157,7 +168,7 @@ int CompareFromEnd (const void* address1, const void* address2)
     return StrcmpForAlphaFromEnd (str1, str2);
 }
 
-int StrcmpForAlphaFromBegin (char* str1, char* str2)
+int StrcmpForAlphaFromBegin (char* str1, char* str2) //TODO const
 {
     assert (str1);
     assert (str2);
@@ -228,8 +239,12 @@ void PrintStrings (char** index_array, FILE* file_write, size_t read_lines, cons
 
 //------------------------------------------------------------------------------------------------------//
 
-void MemoryCleansing (char** index_array, char** index_copy_array, char* buffer)
+void MemoryClearing (char** index_array, char** index_copy_array, char* buffer)
 {
+    assert (index_array);
+    assert (index_copy_array);
+    assert (buffer);
+
     free (index_array);
     free (index_copy_array);
     free (buffer);
